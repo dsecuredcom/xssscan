@@ -31,7 +31,7 @@ func LoadPaths(filename string) ([]string, error) {
 
 		// Validate URL
 		if _, err := url.Parse(line); err != nil {
-			return nil, fmt.Errorf("invalid URL at line %d: %s", lineNum, line)
+			continue
 		}
 
 		paths = append(paths, line)
