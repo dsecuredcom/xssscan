@@ -25,7 +25,7 @@ func LoadPaths(filename string) ([]string, error) {
 		line := strings.TrimSpace(scanner.Text())
 
 		// Skip empty lines and comments
-		if line == "" || strings.HasPrefix(line, "#") {
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasSuffix(line, "#") {
 			continue
 		}
 
