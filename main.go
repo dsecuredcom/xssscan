@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"math/rand"
 	"os"
 	"os/signal"
 	"syscall"
@@ -99,6 +100,11 @@ func run(ctx context.Context, config *Config) error {
 		return fmt.Errorf("loading paths: %w", err)
 	}
 
+	rand.Seed(time.Now().UnixNano())
+	rand.Shuffle(len(paths), func(i, j int) {
+		paths[i], paths[j] = paths[j], paths[i]
+	})
+
 	parameters, err := io.LoadParameters(config.ParametersFile)
 	if err != nil {
 		return fmt.Errorf("loading parameters: %w", err)
@@ -109,9 +115,16 @@ func run(ctx context.Context, config *Config) error {
 	batches := batcher.CreateBatches(parameters, config.ParameterBatch)
 
 	pathsCh := make(chan string, 128) // kleiner Puffer
-	if err := io.StreamPaths(ctx, config.PathsFile, pathsCh); err != nil {
-		return fmt.Errorf("streaming paths: %w", err)
-	}
+	go func() {
+		defer close(pathsCh)
+		for _, p := range paths {
+			select {
+			case pathsCh <- p: // weitergeben
+			case <-ctx.Done():
+				return // sauber beenden, falls Ctrl-C
+			}
+		}
+	}()
 
 	// Calculate total HTTP requests
 	totalHTTPRequests := len(paths) * len(batches) * 2
