@@ -12,7 +12,6 @@ import (
 
 	"github.com/dsecuredcom/xssscan/internal/batcher"
 	"github.com/dsecuredcom/xssscan/internal/io"
-	"github.com/dsecuredcom/xssscan/internal/report"
 	"github.com/dsecuredcom/xssscan/internal/scanner"
 	"github.com/dsecuredcom/xssscan/internal/util"
 )
@@ -41,7 +40,7 @@ func main() {
 	flag.IntVar(&config.ParameterBatch, "parameter-batch", 5, "Number of parameters per request")
 	flag.DurationVar(&config.Timeout, "timeout", 15*time.Second, "Client timeout per request")
 	flag.StringVar(&config.Proxy, "proxy", "", "Optional upstream proxy")
-	flag.IntVar(&config.Workers, "workers", 0, "Number of workers (default: concurrency*2)")
+	flag.IntVar(&config.Workers, "workers", 0, "Number of workers (default: concurrency)")
 	flag.BoolVar(&config.Insecure, "insecure", false, "Ignore TLS certificate errors")
 	flag.IntVar(&config.Retries, "retries", 0, "Number of retries on failure")
 	flag.BoolVar(&config.Verbose, "verbose", false, "Show all requests and HTTP status codes")
@@ -109,9 +108,7 @@ func run(ctx context.Context, config *Config) error {
 	// Create parameter batches
 	batches := batcher.CreateBatches(parameters, config.ParameterBatch)
 
-	// FIXED: Correct calculation display
-	// Each batch generates 2 HTTP requests (one for each payload variant: "> and '>)
-	// Total HTTP requests = paths × batches × 2 variants
+	// Calculate total HTTP requests
 	totalHTTPRequests := len(paths) * len(batches) * 2
 
 	fmt.Printf("[+] Loaded:\n")
@@ -129,17 +126,13 @@ func run(ctx context.Context, config *Config) error {
 		MaxConns: config.Workers,
 	})
 
-	// Initialize reporter
-	reporter := report.NewCollector()
-
-	// Create scanner configuration
+	// Create scanner configuration - NO REPORTER
 	scanConfig := scanner.Config{
 		Method:      config.Method,
 		Concurrency: config.Concurrency,
 		Workers:     config.Workers,
 		Retries:     config.Retries,
 		HTTPClient:  httpClient,
-		Reporter:    reporter,
 		Verbose:     config.Verbose,
 	}
 
@@ -155,29 +148,8 @@ func run(ctx context.Context, config *Config) error {
 		return fmt.Errorf("scanning failed: %w", err)
 	}
 
-	// Generate final summary report (this will now only show totals since individual findings were already printed)
-	fmt.Printf("\n[+] Scan completed. Final summary:\n")
-	results := reporter.GetResults()
-	var reflectedCount int
-	for _, result := range results {
-		if result.Reflected {
-			reflectedCount++
-		}
-	}
-
-	if reflectedCount > 0 {
-		fmt.Printf("\033[31m⚠️  Total reflections found: %d\033[0m\n", reflectedCount)
-		fmt.Printf("Please verify these findings manually.\n")
-	} else {
-		fmt.Printf("[!] No XSS reflections found\n")
-	}
+	// Simple completion message - no summary
+	fmt.Printf("\n[+] Scan completed.\n")
 
 	return nil
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

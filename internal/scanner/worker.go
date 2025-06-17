@@ -1,4 +1,3 @@
-// internal/scanner/worker.go
 package scanner
 
 import (
@@ -11,8 +10,6 @@ import (
 	"golang.org/x/time/rate"
 
 	"github.com/dsecuredcom/xssscan/internal/payload"
-	"github.com/dsecuredcom/xssscan/internal/report"
-	"github.com/dsecuredcom/xssscan/internal/types"
 	"github.com/dsecuredcom/xssscan/internal/util"
 )
 
@@ -33,11 +30,9 @@ type Config struct {
 	Workers     int
 	Retries     int
 	HTTPClient  *util.HTTPClient
-	Reporter    *report.Collector
 	Verbose     bool
 }
 
-// FIXED: Test each batch with both payload variants
 func Run(ctx context.Context, config Config, paths []string, batches [][]string) error {
 	// Create rate limiter
 	limiter := rate.NewLimiter(rate.Limit(config.Concurrency), config.Concurrency)
@@ -52,13 +47,13 @@ func Run(ctx context.Context, config Config, paths []string, batches [][]string)
 		go worker(ctx, &wg, jobs, limiter, config)
 	}
 
-	// Generate and send jobs - FIXED: Generate both payload variants per batch
+	// Generate and send jobs
 	go func() {
 		defer close(jobs)
 
 		for _, path := range paths {
 			for _, batch := range batches {
-				// Generate payloads for this batch - this creates both "> and '> variants
+				// Generate payloads for this batch
 				allPayloads := payload.GeneratePayloads(batch)
 
 				// Group payloads by variant type
@@ -142,18 +137,7 @@ func processJob(ctx context.Context, job Job, config Config) {
 	resp, err := config.HTTPClient.Request(ctx, job.Method, job.URL, job.Payloads)
 
 	if err != nil {
-		// Report error for all payloads in this job
-		for _, p := range job.Payloads {
-			config.Reporter.AddResult(types.Result{
-				URL:       job.URL,
-				Parameter: p.Parameter,
-				Payload:   p.Value,
-				Reflected: false,
-				Error:     err,
-			})
-		}
-
-		// Show error in verbose mode
+		// Show error in verbose mode only
 		if config.Verbose {
 			fmt.Printf("[%sERROR%s] %s %s - %v\n", ColorRed, ColorReset, job.Method, job.URL, err)
 		}
@@ -194,20 +178,9 @@ func processJob(ctx context.Context, job Job, config Config) {
 	// Check for reflections
 	reflections := checkReflections(resp.Body, job.Payloads)
 
-	// Report results and print immediately if reflected
+	// Print immediately if reflected - NO STORAGE
 	for _, p := range job.Payloads {
-		reflected := reflections[p.Value]
-
-		// Store result
-		if reflected {
-			config.Reporter.AddResult(types.Result{
-				URL:        job.URL,
-				Parameter:  p.Parameter,
-				Payload:    p.Value,
-				Reflected:  true,
-				StatusCode: resp.StatusCode,
-			})
-
+		if reflections[p.Value] {
 			if job.Method == "GET" {
 				// For GET requests, show the full URL with parameters
 				u, err := url.Parse(job.URL)
