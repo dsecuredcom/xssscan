@@ -53,7 +53,7 @@ func main() {
 	}
 
 	if config.Workers == 0 {
-		config.Workers = min(config.Concurrency*2, 1000)
+		config.Workers = config.Concurrency
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
