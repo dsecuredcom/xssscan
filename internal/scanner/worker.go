@@ -139,6 +139,14 @@ func processJob(ctx context.Context, job Job, config Config) {
 		return
 	}
 
+	ct := strings.ToLower(resp.ContentType)
+	if resp.ContentType != "" && !strings.Contains(ct, "html") { //   »text/html«, »text/html; charset=utf-8«, »application/xhtml+xml« …
+		if config.Verbose {
+			fmt.Printf("[skip] Non-HTML (%s) → %s %s\n", resp.ContentType, job.Method, job.URL)
+		}
+		return
+	}
+
 	/* ---------- Verbose-Ausgabe (wie gehabt, nur payloads statt job.Payloads) ---------- */
 	if config.Verbose {
 		statusColor := ColorGreen

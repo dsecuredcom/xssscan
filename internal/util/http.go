@@ -30,8 +30,9 @@ type HTTPClient struct {
 }
 
 type Response struct {
-	StatusCode int
-	Body       []byte
+	StatusCode  int
+	Body        []byte
+	ContentType string
 }
 
 func NewHTTPClient(config HTTPConfig) *HTTPClient {
@@ -154,7 +155,14 @@ func (c *HTTPClient) Request(ctx context.Context, method, targetURL string, payl
 	// Copy response body
 	b := resp.Body()
 	bodyCopy := append([]byte(nil), b...)
-	return &Response{StatusCode: resp.StatusCode(), Body: bodyCopy}, nil
+
+	contentType := string(resp.Header.ContentType())
+
+	return &Response{
+		StatusCode:  resp.StatusCode(),
+		Body:        bodyCopy,
+		ContentType: contentType,
+	}, nil
 }
 
 func (c *HTTPClient) requestThroughHTTPProxy(ctx context.Context, method, targetURL string, payloads []payload.Payload) (*Response, error) {
@@ -216,9 +224,12 @@ func (c *HTTPClient) requestThroughHTTPProxy(ctx context.Context, method, target
 	bodyBytes := make([]byte, 2*1024*1024) // 2MB limit
 	n, _ := resp.Body.Read(bodyBytes)
 
+	contentType := resp.Header.Get("Content-Type")
+
 	return &Response{
-		StatusCode: resp.StatusCode,
-		Body:       bodyBytes[:n],
+		StatusCode:  resp.StatusCode,
+		Body:        bodyBytes[:n],
+		ContentType: contentType,
 	}, nil
 }
 
