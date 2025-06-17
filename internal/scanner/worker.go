@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/dsecuredcom/xssscan/internal/payload"
+	"github.com/dsecuredcom/xssscan/internal/report"
 	"golang.org/x/time/rate"
 	"net/url"
 	"strings"
@@ -30,6 +31,7 @@ type Config struct {
 	Retries     int
 	HTTPClient  *util.HTTPClient
 	Verbose     bool
+	Reporter    *report.Reporter
 }
 
 func Run(ctx context.Context, config Config, paths <-chan string, batches [][]string) error {
@@ -136,6 +138,7 @@ func processJob(ctx context.Context, job Job, config Config) {
 		if config.Verbose {
 			fmt.Printf("[%sERROR%s] %s %s - %v\n", ColorRed, ColorReset, job.Method, job.URL, err)
 		}
+		config.Reporter.Inc(1)
 		return
 	}
 
@@ -144,6 +147,7 @@ func processJob(ctx context.Context, job Job, config Config) {
 		if config.Verbose {
 			fmt.Printf("[skip] Non-HTML (%s) → %s %s\n", resp.ContentType, job.Method, job.URL)
 		}
+		config.Reporter.Inc(1)
 		return
 	}
 
@@ -191,5 +195,9 @@ func processJob(ctx context.Context, job Job, config Config) {
 				fmt.Printf("%s=%s\n", p.Parameter, p.Value)
 			}
 		}
+	}
+
+	if config.Reporter != nil {
+		config.Reporter.Inc(1)
 	}
 }

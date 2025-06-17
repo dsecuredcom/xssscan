@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"github.com/dsecuredcom/xssscan/internal/report"
 	"log"
 	"math/rand"
 	"os"
@@ -129,6 +130,9 @@ func run(ctx context.Context, config *Config) error {
 	// Calculate total HTTP requests
 	totalHTTPRequests := len(paths) * len(batches) * 2
 
+	rep := report.New(totalHTTPRequests)
+	defer rep.Close()
+
 	fmt.Printf("[+] Loaded:\n")
 	fmt.Printf("    • %d paths\n", len(paths))
 	fmt.Printf("    • %d parameters\n", len(parameters))
@@ -152,6 +156,7 @@ func run(ctx context.Context, config *Config) error {
 		Retries:     config.Retries,
 		HTTPClient:  httpClient,
 		Verbose:     config.Verbose,
+		Reporter:    rep,
 	}
 
 	// Start scanning
