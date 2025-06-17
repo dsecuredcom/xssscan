@@ -51,6 +51,7 @@ func NewHTTPClient(config HTTPConfig) *HTTPClient {
 		TLSConfig: &tls.Config{
 			InsecureSkipVerify: insecureMode,
 		},
+		MaxIdleConnDuration: 2 * time.Second,
 	}
 
 	httpClient := &HTTPClient{

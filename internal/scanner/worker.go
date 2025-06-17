@@ -33,7 +33,7 @@ type Config struct {
 	Verbose     bool
 }
 
-func Run(ctx context.Context, config Config, paths []string, batches [][]string) error {
+func Run(ctx context.Context, config Config, paths <-chan string, batches [][]string) error {
 	// Create rate limiter
 	limiter := rate.NewLimiter(rate.Limit(config.Concurrency), config.Concurrency)
 
@@ -51,7 +51,7 @@ func Run(ctx context.Context, config Config, paths []string, batches [][]string)
 	go func() {
 		defer close(jobs)
 
-		for _, path := range paths {
+		for path := range paths {
 			for _, batch := range batches {
 				// Generate payloads for this batch
 				allPayloads := payload.GeneratePayloads(batch)

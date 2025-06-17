@@ -108,6 +108,11 @@ func run(ctx context.Context, config *Config) error {
 	// Create parameter batches
 	batches := batcher.CreateBatches(parameters, config.ParameterBatch)
 
+	pathsCh := make(chan string, 128) // kleiner Puffer
+	if err := io.StreamPaths(ctx, config.PathsFile, pathsCh); err != nil {
+		return fmt.Errorf("streaming paths: %w", err)
+	}
+
 	// Calculate total HTTP requests
 	totalHTTPRequests := len(paths) * len(batches) * 2
 
@@ -143,8 +148,7 @@ func run(ctx context.Context, config *Config) error {
 	}
 	fmt.Printf("[+] Reflections will be reported immediately as found:\n")
 
-	err = scanner.Run(ctx, scanConfig, paths, batches)
-	if err != nil {
+	if err := scanner.Run(ctx, scanConfig, pathsCh, batches); err != nil {
 		return fmt.Errorf("scanning failed: %w", err)
 	}
 
