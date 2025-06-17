@@ -199,16 +199,15 @@ func processJob(ctx context.Context, job Job, config Config) {
 		reflected := reflections[p.Value]
 
 		// Store result
-		config.Reporter.AddResult(types.Result{
-			URL:        job.URL,
-			Parameter:  p.Parameter,
-			Payload:    p.Value,
-			Reflected:  reflected,
-			StatusCode: resp.StatusCode,
-		})
-
-		// Print reflection immediately when found with optimized format (always shown)
 		if reflected {
+			config.Reporter.AddResult(types.Result{
+				URL:        job.URL,
+				Parameter:  p.Parameter,
+				Payload:    p.Value,
+				Reflected:  true,
+				StatusCode: resp.StatusCode,
+			})
+
 			if job.Method == "GET" {
 				// For GET requests, show the full URL with parameters
 				u, err := url.Parse(job.URL)

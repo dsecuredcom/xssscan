@@ -1,17 +1,14 @@
 package scanner
 
 import (
-	"strings"
-
+	"bytes"
 	"github.com/dsecuredcom/xssscan/internal/payload"
 )
 
-func checkReflections(body string, payloads []payload.Payload) map[string]bool {
-	reflections := make(map[string]bool)
-
+func checkReflections(body []byte, payloads []payload.Payload) map[string]bool {
+	reflections := make(map[string]bool, len(payloads))
 	for _, p := range payloads {
-		reflections[p.Value] = strings.Contains(body, p.Value)
+		reflections[p.Value] = bytes.Contains(body, []byte(p.Value))
 	}
-
 	return reflections
 }
