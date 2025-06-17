@@ -29,6 +29,10 @@ func LoadPaths(filename string) ([]string, error) {
 			continue
 		}
 
+		if strings.Contains(line, "assets/") || strings.Contains(line, "static/") || strings.Contains(line, "css/") || strings.Contains(line, "js/") || strings.Contains(line, "javascript/") || strings.Contains(line, "scripts/") || strings.Contains(line, "/js/") || strings.Contains(line, "compiled") || strings.Contains(line, "img/") || strings.Contains(line, "images/") {
+			continue
+		}
+
 		// Validate URL
 		if _, err := url.Parse(line); err != nil {
 			continue
