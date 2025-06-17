@@ -3,13 +3,12 @@ package scanner
 import (
 	"context"
 	"fmt"
+	"github.com/dsecuredcom/xssscan/internal/payload"
+	"golang.org/x/time/rate"
 	"net/url"
 	"strings"
 	"sync"
 
-	"golang.org/x/time/rate"
-
-	"github.com/dsecuredcom/xssscan/internal/payload"
 	"github.com/dsecuredcom/xssscan/internal/util"
 )
 
@@ -53,51 +52,29 @@ func Run(ctx context.Context, config Config, paths <-chan string, batches [][]st
 
 		for path := range paths {
 			for _, batch := range batches {
-				// Generate payloads for this batch
-				allPayloads := payload.GeneratePayloads(batch)
 
-				// Group payloads by variant type
-				doubleQuotePayloads := make([]payload.Payload, 0)
-				singleQuotePayloads := make([]payload.Payload, 0)
-
-				for _, p := range allPayloads {
-					if strings.Contains(p.Value, "\">") {
-						doubleQuotePayloads = append(doubleQuotePayloads, p)
-					} else if strings.Contains(p.Value, "'>") {
-						singleQuotePayloads = append(singleQuotePayloads, p)
-					}
+				// 1.  Variante mit ">
+				select {
+				case jobs <- Job{
+					URL:        path,
+					Parameters: batch,
+					Variant:    VariantDoubleQuote,
+					Method:     config.Method,
+				}:
+				case <-ctx.Done():
+					return
 				}
 
-				// Create job for double quote variant (">)
-				if len(doubleQuotePayloads) > 0 {
-					job := Job{
-						URL:        path,
-						Parameters: batch,
-						Payloads:   doubleQuotePayloads,
-						Method:     config.Method,
-					}
-
-					select {
-					case jobs <- job:
-					case <-ctx.Done():
-						return
-					}
-				}
-
-				// Create job for single quote variant ('>)
-				if len(singleQuotePayloads) > 0 {
-					job := Job{
-						URL:        path,
-						Parameters: batch,
-						Payloads:   singleQuotePayloads,
-						Method:     config.Method,
-					}
-
-					select {
-					case jobs <- job:
-					case <-ctx.Done():
-						return
-					}
+				// 2.  Variante mit '>
+				select {
+				case jobs <- Job{
+					URL:        path,
+					Parameters: batch,
+					Variant:    VariantSingleQuote,
+					Method:     config.Method,
+				}:
+				case <-ctx.Done():
+					return
 				}
 			}
 		}
@@ -133,18 +110,36 @@ func worker(ctx context.Context, wg *sync.WaitGroup, jobs <-chan Job, limiter *r
 }
 
 func processJob(ctx context.Context, job Job, config Config) {
-	// Create request with payloads
-	resp, err := config.HTTPClient.Request(ctx, job.Method, job.URL, job.Payloads)
+	// ▸ Payloads erst JETZT bauen  (Back-Pressure)
+	all := payload.GeneratePayloads(job.Parameters)
 
+	payloads := make([]payload.Payload, 0, len(all)/2)
+	for _, p := range all {
+		switch job.Variant {
+		case VariantDoubleQuote:
+			if strings.Contains(p.Value, "\">") {
+				payloads = append(payloads, p)
+			}
+		case VariantSingleQuote:
+			if strings.Contains(p.Value, "'>") {
+				payloads = append(payloads, p)
+			}
+		}
+	}
+	if len(payloads) == 0 {
+		return
+	}
+
+	// HTTP-Request
+	resp, err := config.HTTPClient.Request(ctx, job.Method, job.URL, payloads)
 	if err != nil {
-		// Show error in verbose mode only
 		if config.Verbose {
 			fmt.Printf("[%sERROR%s] %s %s - %v\n", ColorRed, ColorReset, job.Method, job.URL, err)
 		}
 		return
 	}
 
-	// Show verbose output AFTER getting response - URL and status together
+	/* ---------- Verbose-Ausgabe (wie gehabt, nur payloads statt job.Payloads) ---------- */
 	if config.Verbose {
 		statusColor := ColorGreen
 		if resp.StatusCode >= 400 {
@@ -154,44 +149,36 @@ func processJob(ctx context.Context, job Job, config Config) {
 		}
 
 		if job.Method == "GET" {
-			// For GET requests, build and show the complete URL with all parameters
-			u, err := url.Parse(job.URL)
-			if err == nil {
+			if u, err := url.Parse(job.URL); err == nil {
 				q := u.Query()
-				for _, p := range job.Payloads {
+				for _, p := range payloads {
 					q.Set(p.Parameter, p.Value)
 				}
 				u.RawQuery = q.Encode()
 				fmt.Printf("[%s%d%s] %s %s\n", statusColor, resp.StatusCode, ColorReset, job.Method, u.String())
 			}
 		} else {
-			// For POST requests, show URL and all form data
 			fmt.Printf("[%s%d%s] %s %s\n", statusColor, resp.StatusCode, ColorReset, job.Method, job.URL)
-			var formPairs []string
-			for _, p := range job.Payloads {
-				formPairs = append(formPairs, fmt.Sprintf("%s=%s", p.Parameter, p.Value))
+			var pairs []string
+			for _, p := range payloads {
+				pairs = append(pairs, fmt.Sprintf("%s=%s", p.Parameter, p.Value))
 			}
-			fmt.Printf("    Body: %s\n", strings.Join(formPairs, "&"))
+			fmt.Printf("    Body: %s\n", strings.Join(pairs, "&"))
 		}
 	}
 
-	// Check for reflections
-	reflections := checkReflections(resp.Body, job.Payloads)
-
-	// Print immediately if reflected - NO STORAGE
-	for _, p := range job.Payloads {
+	/* ---------- Reflections sofort melden ---------- */
+	reflections := checkReflections(resp.Body, payloads)
+	for _, p := range payloads {
 		if reflections[p.Value] {
 			if job.Method == "GET" {
-				// For GET requests, show the full URL with parameters
-				u, err := url.Parse(job.URL)
-				if err == nil {
+				if u, err := url.Parse(job.URL); err == nil {
 					q := u.Query()
 					q.Set(p.Parameter, p.Value)
 					u.RawQuery = q.Encode()
 					fmt.Printf("[%sREFLECTED%s] [%sGET%s] %s\n", ColorRed, ColorReset, ColorGreen, ColorReset, u.String())
 				}
 			} else {
-				// For POST requests, show URL and payload on separate line
 				fmt.Printf("[%sREFLECTED%s] [%sPOST%s] %s\n", ColorRed, ColorReset, ColorGreen, ColorReset, job.URL)
 				fmt.Printf("%s=%s\n", p.Parameter, p.Value)
 			}
