@@ -132,7 +132,7 @@ func (c *HTTPClient) Request(ctx context.Context, method, targetURL string, payl
 	defer fasthttp.ReleaseResponse(resp)
 
 	// Set User-Agent
-	req.Header.Set("User-Agent", "XSSScanner/1.0")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1")
 
 	if method == "GET" {
 		if err := c.buildGETRequest(req, targetURL, payloads); err != nil {
@@ -191,13 +191,13 @@ func (c *HTTPClient) requestThroughHTTPProxy(ctx context.Context, method, target
 		requestLine = fmt.Sprintf("POST %s HTTP/1.1\r\n", targetURL)
 		requestLine += "Content-Type: application/x-www-form-urlencoded\r\n"
 		requestLine += fmt.Sprintf("Content-Length: %d\r\n", len(body))
-		requestLine += "User-Agent: XSSScanner/1.0\r\n"
+		requestLine += "User-Agent: Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1\r\n"
 		requestLine += "\r\n"
 		requestLine += body
 	}
 
 	if method == "GET" {
-		requestLine += "User-Agent: XSSScanner/1.0\r\n"
+		requestLine += "User-Agent: Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1\r\n"
 		requestLine += "\r\n"
 	}
 
