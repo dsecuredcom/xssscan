@@ -43,7 +43,7 @@ func Run(ctx context.Context, config Config, paths []string, batches [][]string)
 	limiter := rate.NewLimiter(rate.Limit(config.Concurrency), config.Concurrency)
 
 	// Create job queue
-	jobs := make(chan Job, config.Concurrency)
+	jobs := make(chan Job, config.Concurrency*2)
 
 	// Start workers
 	var wg sync.WaitGroup
